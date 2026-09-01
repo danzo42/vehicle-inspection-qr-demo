@@ -230,7 +230,7 @@ button{font-family:inherit}
 .certificate .sub{text-align:center;font-size:11px;color:#666;margin-bottom:14px}
 .certificate table{width:100%;border-collapse:collapse;font-size:11.5px;margin-bottom:10px}
 .certificate table.head td{border:1px solid #999;padding:5px 8px}
-.certificate table.head td.k{background:#f0efe9;font-weight:700;width:110px}
+.certificate table.head td.k{background:#f0efe9;font-weight:700;width:120px;white-space:nowrap}
 .certificate .items-2col{display:flex;gap:10px;align-items:flex-start}
 .certificate .items-2col > table{flex:1 1 0;min-width:0}
 .certificate table.items{margin-top:6px;table-layout:fixed}
@@ -13344,9 +13344,15 @@ function renderCertificateHTML(record){
     itemsHtml = certItemsTable(entries);
   }
 
-  var office = record.office || v.office || "-";
-  var shakenDate = record.shakenDate ? fmtDateJP(record.shakenDate)
-                 : (v.shakenDate ? fmtDateJP(v.shakenDate) : "-");
+  /* 記録簿に載せる値。入力欄で上書きされていればそれを、無ければ車両マスタの値を使う。 */
+  function pick(a,b){ return (a!==undefined && a!==null && a!=="") ? a : (b||""); }
+  function asDate(x){ return x ? fmtDateJP(x) : "-"; }
+  function asKm(x){ return (x===""||x===null||x===undefined) ? "-" : (x+" km"); }
+  var office          = pick(record.office, v.office) || "-";
+  var shakenDate      = asDate(pick(record.shakenDate, v.shakenDate));
+  var shakenMileage   = asKm(pick(record.shakenMileage, v.shakenMileage));
+  var lastInspDate    = asDate(pick(record.lastInspDate, v.lastInspDate));
+  var lastInspMileage = asKm(pick(record.lastInspMileage, v.lastInspMileage));
 
   return ''
     + '<h2>'+esc(TYPE_LABEL[record.type])+'整備記録簿</h2>'
@@ -13354,7 +13360,9 @@ function renderCertificateHTML(record){
     + '<table class="head">'
     + '<tr><td class="k">自動車登録番号</td><td>'+esc(v.reg)+'</td><td class="k">車台番号</td><td>'+esc(v.chassis)+'</td></tr>'
     + '<tr><td class="k">車種</td><td>'+esc(v.kind)+'</td><td class="k">管理番号(YDEC№)</td><td>'+esc(v.id)+'</td></tr>'
-    + '<tr><td class="k">車検満了日</td><td>'+esc(shakenDate)+'</td><td class="k">点検営業所</td><td>'+esc(office)+'</td></tr>'
+    + '<tr><td class="k">点検営業所</td><td colspan="3">'+esc(office)+'</td></tr>'
+    + '<tr><td class="k">車検満了日</td><td>'+esc(shakenDate)+'</td><td class="k">車検時走行距離</td><td>'+esc(shakenMileage)+'</td></tr>'
+    + '<tr><td class="k">前回点検日</td><td>'+esc(lastInspDate)+'</td><td class="k">前回点検時走行距離</td><td>'+esc(lastInspMileage)+'</td></tr>'
     + '<tr><td class="k">点検日</td><td>'+esc(fmtDateJP(record.dateISO))+'</td><td class="k">点検時走行距離</td><td>'+esc(record.mileage)+' km</td></tr>'
     + '<tr><td class="k">車検証</td><td>'+esc(record.shakenValid)+'</td><td class="k">三角停止板</td><td>'+esc(record.triangleValid)+'</td></tr>'
     + '</table>'
@@ -13596,9 +13604,14 @@ function viewInspect(vid, type){
     + '<div class="field"><label>点検実施者名</label><input type="text" id="fInspector" placeholder="氏名を入力"></div>'
     + '<div class="field"><label>整備管理者</label><input type="text" id="fManager" value="'+esc(v.manager||"")+'"></div>'
     + '</div>'
+    + '<div class="field"><label>点検営業所</label><input type="text" id="fOffice" value="'+esc(v.office||"")+'" placeholder="営業所名を入力"></div>'
     + '<div class="field-row">'
     + '<div class="field"><label>車検満了日</label><input type="date" id="fShakenDate" value="'+esc(v.shakenDate||"")+'"></div>'
-    + '<div class="field"><label>点検営業所</label><input type="text" id="fOffice" value="'+esc(v.office||"")+'" placeholder="営業所名を入力"></div>'
+    + '<div class="field"><label>車検時走行距離 (km)</label><input type="number" id="fShakenMileage" inputmode="numeric" value="'+esc(v.shakenMileage||"")+'" placeholder="例: 88000"></div>'
+    + '</div>'
+    + '<div class="field-row">'
+    + '<div class="field"><label>前回点検日</label><input type="date" id="fLastInspDate" value="'+esc(v.lastInspDate||"")+'"></div>'
+    + '<div class="field"><label>前回点検時走行距離 (km)</label><input type="number" id="fLastInspMileage" inputmode="numeric" value="'+esc(v.lastInspMileage||"")+'" placeholder="例: 89500"></div>'
     + '</div>'
     + '<div class="field-row">'
     + '<div class="field"><label>車検証</label><div class="radio2"><label><input type="radio" name="fShaken" value="有" checked> 有</label><label><input type="radio" name="fShaken" value="無"> 無</label></div></div>'
@@ -13674,6 +13687,9 @@ function viewInspect(vid, type){
       inspector: inspector,
       manager: $("#fManager").value.trim(),
       shakenDate: $("#fShakenDate").value || "",
+      shakenMileage: $("#fShakenMileage").value || "",
+      lastInspDate: $("#fLastInspDate").value || "",
+      lastInspMileage: $("#fLastInspMileage").value || "",
       office: $("#fOffice").value.trim(),
       shakenValid: (document.querySelector('input[name="fShaken"]:checked')||{}).value || "有",
       triangleValid: (document.querySelector('input[name="fTri"]:checked')||{}).value || "有",
