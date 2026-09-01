@@ -7,7 +7,7 @@
  *   下の CACHE_VERSION の数字を必ず 1 つ増やしてから index.html を差し替えてください。
  *   数字を変えないと、端末に残った古いアプリが使われ続けます。
  */
-const CACHE_VERSION = "v2";
+const CACHE_VERSION = "v3";
 const CACHE_NAME = "inspection-qr-portal-" + CACHE_VERSION;
 
 const ASSETS = [

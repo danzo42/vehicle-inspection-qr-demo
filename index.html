@@ -231,9 +231,12 @@ button{font-family:inherit}
 .certificate table{width:100%;border-collapse:collapse;font-size:11.5px;margin-bottom:10px}
 .certificate table.head td{border:1px solid #999;padding:5px 8px}
 .certificate table.head td.k{background:#f0efe9;font-weight:700;width:110px}
-.certificate table.items{margin-top:6px}
-.certificate table.items th{background:#e7eef2;border:1px solid #999;padding:4px 6px;font-size:11px;text-align:left}
-.certificate table.items td{border:1px solid #bbb;padding:4px 6px;font-size:11px}
+.certificate .items-2col{display:flex;gap:10px;align-items:flex-start}
+.certificate .items-2col > table{flex:1 1 0;min-width:0}
+.certificate table.items{margin-top:6px;table-layout:fixed}
+.certificate table.items th{background:#e7eef2;border:1px solid #999;padding:3px 5px;font-size:10.5px;text-align:left}
+.certificate table.items td{border:1px solid #bbb;padding:3px 5px;font-size:10.5px;word-break:break-word}
+.certificate table.items th:last-child,.certificate table.items td:last-child{width:23%;text-align:center;word-break:keep-all}
 .certificate table.items tr.cat td{background:#f4f2ea;font-weight:700}
 .certificate .res-good{color:#2f7a4f;font-weight:700}
 .certificate .res-action{color:#b6432c;font-weight:700}
@@ -247,11 +250,13 @@ body.printing #certificate{
   display:block !important;position:static !important;left:auto !important;width:100% !important;padding:0 !important;
 }
 @media print{
+  @page{size:A4 portrait;margin:10mm}
   body{background:#fff}
   .topbar, .container{display:none !important}
   #certificate{
     display:block !important;position:static !important;left:auto !important;width:100% !important;padding:0 !important;
   }
+  .certificate .items-2col{break-inside:avoid}
 }
 </style>
 </head>
@@ -13300,13 +13305,20 @@ function searchVehicles(q, limit){
 }
 
 /* ---------------- 記録簿PDF ---------------- */
+function certItemsTable(entries){
+  var body = "";
+  for(var i=0;i<entries.length;i++) body += entries[i].html;
+  return '<table class="items"><thead><tr><th>点検箇所</th><th>判定</th></tr></thead><tbody>'
+       + body + '</tbody></table>';
+}
+
 function renderCertificateHTML(record){
-  var v = vehicleById(record.vehicleId) || {reg:"",chassis:"",kind:"",office:"",id:record.vehicleId};
-  var rows = "", currentCat = null;
+  var v = vehicleById(record.vehicleId) || {reg:"",chassis:"",kind:"",office:"",shakenDate:"",id:record.vehicleId};
+  var entries = [], currentCat = null;
   flatFor(record.type).forEach(function(it){
     if(it.cat!==currentCat){
-      rows += '<tr class="cat"><td colspan="2">'+esc(it.cat)+'</td></tr>';
       currentCat = it.cat;
+      entries.push({kind:"cat", cat:it.cat, html:'<tr class="cat"><td colspan="2">'+esc(it.cat)+'</td></tr>'});
     }
     var a = record.items[it.id] || {status:"good"};
     var resTxt, resCls;
@@ -13314,8 +13326,27 @@ function renderCertificateHTML(record){
     else if(a.status==="action"){ resTxt=(a.code||"要処置"); resCls="res-action"; }
     else { resTxt="良好"; resCls="res-good"; }
     var label = (it.group? (it.group+" / ") : "") + it.label;
-    rows += '<tr><td>'+esc(label)+'</td><td class="'+resCls+'">'+esc(resTxt)+'</td></tr>';
+    entries.push({kind:"item", cat:it.cat, html:'<tr><td>'+esc(label)+'</td><td class="'+resCls+'">'+esc(resTxt)+'</td></tr>'});
   });
+
+  /* A4縦1枚に収めるため、項目が多い3ヶ月点検(45項目)だけ2段組みにする。
+     6ヶ月点検(21項目)は単段でも収まるので、そのまま1列で組む。 */
+  var itemsHtml;
+  if(flatFor(record.type).length > 30){
+    var half = Math.ceil(entries.length/2);
+    if(entries[half-1] && entries[half-1].kind==="cat") half--;   /* 段末に見出しだけ残さない */
+    var colA = entries.slice(0, half), colB = entries.slice(half);
+    if(colB.length && colB[0].kind==="item"){
+      colB = [{html:'<tr class="cat"><td colspan="2">'+esc(colB[0].cat)+'（続き）</td></tr>'}].concat(colB);
+    }
+    itemsHtml = '<div class="items-2col">'+certItemsTable(colA)+certItemsTable(colB)+'</div>';
+  }else{
+    itemsHtml = certItemsTable(entries);
+  }
+
+  var office = record.office || v.office || "-";
+  var shakenDate = record.shakenDate ? fmtDateJP(record.shakenDate)
+                 : (v.shakenDate ? fmtDateJP(v.shakenDate) : "-");
 
   return ''
     + '<h2>'+esc(TYPE_LABEL[record.type])+'整備記録簿</h2>'
@@ -13323,13 +13354,11 @@ function renderCertificateHTML(record){
     + '<table class="head">'
     + '<tr><td class="k">自動車登録番号</td><td>'+esc(v.reg)+'</td><td class="k">車台番号</td><td>'+esc(v.chassis)+'</td></tr>'
     + '<tr><td class="k">車種</td><td>'+esc(v.kind)+'</td><td class="k">管理番号(YDEC№)</td><td>'+esc(v.id)+'</td></tr>'
+    + '<tr><td class="k">車検満了日</td><td>'+esc(shakenDate)+'</td><td class="k">点検営業所</td><td>'+esc(office)+'</td></tr>'
     + '<tr><td class="k">点検日</td><td>'+esc(fmtDateJP(record.dateISO))+'</td><td class="k">点検時走行距離</td><td>'+esc(record.mileage)+' km</td></tr>'
-    + '<tr><td class="k">点検営業所</td><td>'+esc(v.office||"-")+'</td><td class="k">整備管理者</td><td>'+esc(record.manager||"-")+'</td></tr>'
     + '<tr><td class="k">車検証</td><td>'+esc(record.shakenValid)+'</td><td class="k">三角停止板</td><td>'+esc(record.triangleValid)+'</td></tr>'
     + '</table>'
-    + '<table class="items"><thead><tr><th style="width:72%">点検箇所</th><th>判定</th></tr></thead><tbody>'
-    + rows
-    + '</tbody></table>'
+    + itemsHtml
     + (record.remark ? ('<div style="font-size:11px;margin-top:6px"><b>特記事項：</b>'+esc(record.remark)+'</div>') : '')
     + '<div class="footer-grid">'
     + '<div>点検実施者<br><br>'+esc(record.inspector)+'</div>'
@@ -13351,20 +13380,16 @@ async function buildPdfBlob(record){
   await new Promise(function(r){ setTimeout(r, 60); });
   var canvas = await html2canvas(certEl, {scale:2, backgroundColor:"#ffffff"});
   certEl.style.display = "none";
-  var imgData = canvas.toDataURL("image/png");
-  var pdf = new window.jspdf.jsPDF({unit:"mm", format:"a4"});
+  /* PNGだと記録簿1枚で10MB超になりメール添付に支障が出るため、JPEGで出力する（同解像度で約1/20） */
+  var imgData = canvas.toDataURL("image/jpeg", 0.92);
+  var pdf = new window.jspdf.jsPDF({unit:"mm", format:"a4", orientation:"portrait"});
+  /* A4縦1枚に必ず収める。幅いっぱいに広げ、高さが余白内に入らなければ縮小する。 */
   var pageW=210, pageH=297, margin=10;
-  var imgW = pageW - margin*2;
-  var imgH = canvas.height * imgW / canvas.width;
-  var heightLeft = imgH, position = margin;
-  pdf.addImage(imgData, "PNG", margin, position, imgW, imgH);
-  heightLeft -= (pageH - margin*2);
-  while(heightLeft > 0){
-    position = margin - (imgH - heightLeft);
-    pdf.addPage();
-    pdf.addImage(imgData, "PNG", margin, position, imgW, imgH);
-    heightLeft -= (pageH - margin*2);
-  }
+  var maxW = pageW - margin*2, maxH = pageH - margin*2;
+  var ratio = canvas.height / canvas.width;
+  var imgW = maxW, imgH = imgW * ratio;
+  if(imgH > maxH){ imgH = maxH; imgW = imgH / ratio; }
+  pdf.addImage(imgData, "JPEG", (pageW - imgW)/2, margin, imgW, imgH);
   return pdf.output("blob");
 }
 
@@ -13572,10 +13597,14 @@ function viewInspect(vid, type){
     + '<div class="field"><label>整備管理者</label><input type="text" id="fManager" value="'+esc(v.manager||"")+'"></div>'
     + '</div>'
     + '<div class="field-row">'
+    + '<div class="field"><label>車検満了日</label><input type="date" id="fShakenDate" value="'+esc(v.shakenDate||"")+'"></div>'
+    + '<div class="field"><label>点検営業所</label><input type="text" id="fOffice" value="'+esc(v.office||"")+'" placeholder="営業所名を入力"></div>'
+    + '</div>'
+    + '<div class="field-row">'
     + '<div class="field"><label>車検証</label><div class="radio2"><label><input type="radio" name="fShaken" value="有" checked> 有</label><label><input type="radio" name="fShaken" value="無"> 無</label></div></div>'
     + '<div class="field"><label>三角停止板</label><div class="radio2"><label><input type="radio" name="fTri" value="有" checked> 有</label><label><input type="radio" name="fTri" value="無"> 無</label></div></div>'
     + '</div>'
-    + '<div style="font-size:.76rem;color:var(--ink-soft)">車台番号: '+esc(v.chassis)+' ／ 車検満了日: '+esc(v.shakenDate?fmtDateJP(v.shakenDate):"未登録")+'</div>'
+    + '<div style="font-size:.76rem;color:var(--ink-soft)">車台番号: '+esc(v.chassis)+'</div>'
     + '</div>'
     + '<div class="section-label">点検項目（'+flat.length+'項目）</div>';
 
@@ -13644,6 +13673,8 @@ function viewInspect(vid, type){
       mileage: mileage,
       inspector: inspector,
       manager: $("#fManager").value.trim(),
+      shakenDate: $("#fShakenDate").value || "",
+      office: $("#fOffice").value.trim(),
       shakenValid: (document.querySelector('input[name="fShaken"]:checked')||{}).value || "有",
       triangleValid: (document.querySelector('input[name="fTri"]:checked')||{}).value || "有",
       remark: $("#fRemark").value.trim(),
