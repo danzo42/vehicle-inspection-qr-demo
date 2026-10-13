@@ -28,12 +28,28 @@
    * @param {Object} def            定義（loadDefinitionの戻り値）
    * @param {string} cycle          '3month' | '6month'
    */
-  function render(container, def, cycle) {
+  function render(container, def, cycle, vehicle) {
     const spec = def.cycles[cycle];
     if (!spec) throw new Error(`点検区分が定義にありません: ${cycle}`);
 
     const codes = def.judgementCodes;
     const html = [];
+
+    // --- 対象車種（記録簿右上で○を付ける車種。管理番号の記号から自動で選ぶ）---
+    const targets = targetOptions(spec);
+    if (targets.length) {
+      const guessed = vehicle ? guessTarget(spec, vehicle.vehicleId) : null;
+      html.push('<section class="card">');
+      html.push('<h2>対象車種</h2>');
+      html.push('<p class="small muted">記録簿の「対象車種」で○を付ける車種です。違っていれば選び直してください。</p>');
+      html.push('<div class="chips">');
+      targets.forEach(t => {
+        html.push(`
+          <label class="chip"><input type="radio" name="target" value="${util.esc(t.id)}"
+            ${guessed && guessed.id === t.id ? 'checked' : ''}><span>${util.esc(t.text)}</span></label>`);
+      });
+      html.push('</div></section>');
+    }
 
     // --- 事前確認（車検証・三角停止板の有無）---
     html.push('<section class="card">');
@@ -174,6 +190,19 @@
     more.setAttribute('aria-expanded', String(!panel.hidden));
   }
 
+  /** 定義の targets から、○で囲める車種だけを取り出す */
+  function targetOptions(spec) {
+    const out = [];
+    (spec.targets || []).forEach(line => line.forEach(seg => { if (seg && typeof seg === 'object') out.push(seg); }));
+    return out;
+  }
+
+  /** 管理番号の記号（DC4-0737 → DC4）から、対象車種を推定する。見つからなければ null */
+  function guessTarget(spec, vehicleId) {
+    const prefix = util.prefixOf(util.normalizeVehicleId(vehicleId));
+    return targetOptions(spec).find(t => (t.prefixes || []).includes(prefix)) || null;
+  }
+
   /** 入力の進み具合を数える */
   function updateProgress(container) {
     const items = util.$$('.item', container);
@@ -197,6 +226,10 @@
     const spec  = def.cycles[cycle];
     const codeMap = {};
     def.judgementCodes.forEach(c => { codeMap[c.code] = c; });
+
+    const targetEl = container.querySelector('input[name="target"]:checked');
+    const targetDef = targetEl ? targetOptions(spec).find(t => t.id === targetEl.value) : null;
+    const target = targetDef ? { id: targetDef.id, text: targetDef.text } : null;
 
     const preChecks = {};
     def.preChecks.forEach(pc => {
@@ -229,6 +262,7 @@
     const notApplicable = results.filter(r => r.code === 'NA');
 
     return {
+      target,
       preChecks,
       results,
       summary: {
@@ -256,6 +290,6 @@
     return el;
   }
 
-  VIS.form = { loadDefinition, render, collect, updateProgress, focusFirstUnfilled };
+  VIS.form = { loadDefinition, render, collect, updateProgress, focusFirstUnfilled, guessTarget, targetOptions };
 
 })(window);

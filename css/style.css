@@ -119,6 +119,16 @@ input[type=text], input[type=number], input[type=date], select, textarea {
 }
 .seg input:checked + span { background: var(--primary); color: #fff; border-color: var(--primary); }
 
+/* 対象車種の選択（丸いボタン） */
+.chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.chip { position: relative; }
+.chip input { position: absolute; opacity: 0; }
+.chip span {
+  display: inline-block; padding: 9px 14px; min-height: 44px; line-height: 22px;
+  border: 2px solid var(--line); border-radius: 999px; cursor: pointer; font-size: 14px; background: #fff;
+}
+.chip input:checked + span { background: var(--primary); color: #fff; border-color: var(--primary); }
+
 /* ------------------------------------------------------------- 点検項目1件分 */
 .item {
   padding: 10px 4px; border-top: 1px solid var(--line);

@@ -4,7 +4,7 @@
  * 「車両法定点検実施要綱 20150525改訂.xls」の ３ヶ月／６ヶ月 定期点検整備記録簿を
  * そのまま再現し、点検結果を書き込んだ状態でA4一枚のPDFにします。
  *
- *   ・左上に会社ロゴ（YDEC）、記録簿名、対象車種
+ *   ・左上に会社ロゴ（YDEC）、記録簿名、対象車種（該当する車種を○で囲む）
  *   ・点検日／車検満了日／前回点検日、各走行距離、点検営業所、整備管理者、YDEC№
  *   ・自動車登録番号／車台番号／車種、車検証・三角停止板の有無（○で囲む）
  *   ・点検項目は紙と同じ左右2列。省略できない項目は「太字＋下線＋黄色の□」
@@ -137,6 +137,38 @@
         return w / MM;
       },
 
+      /**
+       * 複数の文字片を1行に並べて描き、各片の左端・右端の位置（mm）を返す。
+       * 「対象車種」のように、行の中の特定の語を○で囲むときに使う。
+       * fit(mm) を渡すと、行全体がその幅に収まるよう文字を小さくする（最小70%）。
+       */
+      runs(parts, x, y, opt) {
+        opt = opt || {};
+        const base = opt.size || 10;
+        let size = base;
+        setFont(size, false);
+        if (opt.fit) {
+          const limit = opt.fit * MM;
+          while (ctx.measureText(parts.join('')).width > limit && size > base * 0.7) {
+            size -= 0.25;
+            setFont(size, false);
+          }
+        }
+        ctx.save();
+        ctx.fillStyle = '#000';
+        ctx.textBaseline = 'middle';
+        let cur = x * MM;
+        const pos = parts.map(s => {
+          const w = ctx.measureText(s).width;
+          ctx.fillText(s, cur, y * MM);
+          const r = { x0: cur / MM, x1: (cur + w) / MM };
+          cur += w;
+          return r;
+        });
+        ctx.restore();
+        return pos;
+      },
+
       /** 指定幅で折り返した行の配列を返す（日本語は1文字単位で折り返す） */
       wrap(str, widthMm, sizePt) {
         setFont(sizePt, false);
@@ -184,7 +216,7 @@
   // ---------------------------------------------------------------------------
   //  ① 見出し（ロゴ・記録簿名・対象車種）
   // ---------------------------------------------------------------------------
-  function drawHeader(p, ctx, spec, logo) {
+  function drawHeader(p, ctx, spec, logo, targetId) {
     const y = 14, h = 12;
 
     // ロゴ＋記録簿名（太枠）
@@ -202,9 +234,20 @@
     p.rect(74.5, y, 24, h, 0.25);
     p.text('対象車種', 86.5, y + h / 2, { size: 10.5, align: 'center' });
     p.rect(98.5, y, R - 98.5, h, 0.25);
-    (spec.targetLines || [spec.targetNote || '']).forEach((t, i, arr) => {
+    const lines = spec.targets || [[spec.targetNote || '']];
+    lines.forEach((line, i, arr) => {
       const ly = arr.length === 1 ? y + h / 2 : y + 3.2 + i * 5.6;
-      p.text(t, 100, ly, { size: 9.5, fit: R - 100 - 1 });
+      const parts = line.map(seg => (typeof seg === 'string' ? seg : seg.text));
+      // ○が枠線にかからないよう、左に少し余白をとって書き始める
+      const pos = p.runs(parts, 101.8, ly, { size: 9.5, fit: R - 101.8 - 1.5 });
+      // 該当する車種を○で囲む（車検証・三角停止板の「有・無」と同じ）
+      line.forEach((seg, k) => {
+        if (seg && typeof seg === 'object' && seg.id === targetId) {
+          const cx = (pos[k].x0 + pos[k].x1) / 2;
+          const rx = (pos[k].x1 - pos[k].x0) / 2 + 1.1;
+          p.ellipse(cx, ly, rx, 2.5);
+        }
+      });
     });
   }
 
@@ -473,7 +516,12 @@
     const logo = await loadImage(company.logoUrl).catch(() => null);
 
     const p = createPainter(ctx);
-    drawHeader(p, ctx, spec, logo);
+    let targetId = record.target && record.target.id;
+    if (!targetId && VIS.form && VIS.form.guessTarget) {
+      const guessed = VIS.form.guessTarget(spec, record.vehicleId || vehicle.vehicleId);
+      targetId = guessed && guessed.id;
+    }
+    drawHeader(p, ctx, spec, logo, targetId);
     drawDateRows(p, record, vehicle);
     drawVehicleRow(p, record, vehicle);
     const listBottom   = drawChecklist(p, spec, record);

@@ -10,6 +10,9 @@
     "  units[].items[]               … 実際にチェックする点検項目",
     "  items[].id                    … 保存用のキー。★一度運用を始めたら変更しないこと（過去記録と対応しなくなるため）",
     "  items[].label                 … 画面とPDFに出す文言",
+    "  cycles.<区分>.targets         … 記録簿右上の「対象車種」。1行ずつの配列で、文字列はそのまま印字、",
+    "                                  { id, text, prefixes } は○で囲める車種。管理番号の記号が prefixes に",
+    "                                  含まれる車両は、その車種が自動で選ばれる（入力画面で変更も可）",
     "  units[].bulkNa                … true = 「まとめて該当なし」ボタンを出す（装置が付いていない車両がある中分類だけ）",
     "  items[].optional              … true = 記録簿で下線なし・白い□の項目（走行距離が規定以下なら省略可）",
     "                                  省略できない項目（下線付き・黄色の□）は optional を書かない",
@@ -43,9 +46,19 @@
     "3month": {
       "title": "３ヶ月定期点検整備記録簿",
       "formTitle": "3ヶ月定期点検整備記録簿",
-      "targetLines": [
-        "ダンプカー　・　ユニック車　・　トラック　・　ライトバン　・　散水車",
-        "高所作業車　・　その他特種車両　（　軽四　・　乗用車　以外　）"
+      "targets": [
+        [
+          { "id": "dump",      "text": "ダンプカー",     "prefixes": ["DC2", "DC3", "DC4", "DC10", "RD", "SH4"] }, "　・　",
+          { "id": "unic",      "text": "ユニック車",     "prefixes": ["UC2", "UC3", "UC4", "UC6"] }, "　・　",
+          { "id": "truck",     "text": "トラック",       "prefixes": ["TC", "TC1", "TC2", "TC3", "TC4", "TRG", "WTR"] }, "　・　",
+          { "id": "van",       "text": "ライトバン",     "prefixes": ["VAN"] }, "　・　",
+          { "id": "sprinkler", "text": "散水車",         "prefixes": ["WS2", "WS4"] }
+        ],
+        [
+          { "id": "aerial",    "text": "高所作業車",     "prefixes": ["SL12", "SL17", "SL22", "SL255"] }, "　・　",
+          { "id": "special",   "text": "その他特種車両", "prefixes": ["VD4", "VD5", "JK", "OFC"] },
+          "　（　軽四　・　乗用車　以外　）"
+        ]
       ],
       "targetNote": "ダンプカー・ユニック車・トラック・ライトバン・散水車・高所作業車・その他特種車両（軽四・乗用車以外）",
       "omitNote": "下線のない項目は、車検証交付日又は前回点検日以降の走行距離が３ヶ月当たり2,000km以下のとき点検を省略できます。ただし前回の点検で実施しなかった項目は実施が必要です。",
@@ -223,9 +236,19 @@
     "6month": {
       "title": "６ヶ月定期点検整備記録簿",
       "formTitle": "6ヶ月定期点検整備記録簿",
-      "targetLines": [
-        "軽ダンプカー　・　軽トラック　・　軽1BOX　等の軽四輪車",
-        "セダン　・　ワゴン　・　1BOX　等の乗用車"
+      "targets": [
+        [
+          { "id": "kei_dump",  "text": "軽ダンプカー", "prefixes": ["KDC"] }, "　・　",
+          { "id": "kei_truck", "text": "軽トラック",   "prefixes": ["KTC"] }, "　・　",
+          { "id": "kei_1box",  "text": "軽1BOX",       "prefixes": ["K1BOX"] }, "　等の ",
+          { "id": "kei",       "text": "軽四輪車",     "prefixes": ["KEI"] }
+        ],
+        [
+          { "id": "sedan",     "text": "セダン",       "prefixes": [] }, "　・　",
+          { "id": "wagon",     "text": "ワゴン",       "prefixes": [] }, "　・　",
+          { "id": "box",       "text": "1BOX",         "prefixes": ["1BOX"] }, "　等の ",
+          { "id": "car",       "text": "乗用車",       "prefixes": ["CAR"] }
+        ]
       ],
       "targetNote": "軽ダンプカー・軽トラック・軽1BOX等の軽四輪車、セダン・ワゴン・1BOX等の乗用車",
       "omitNote": "下線のない項目は、車検証交付日又は前回点検日以降の走行距離が６ヶ月当たり4,000km以下のとき点検を省略できます。ただし前回の点検で実施しなかった項目は実施が必要です。",

@@ -164,7 +164,7 @@
     $('#meter').style.width = (total ? (done / total * 100) : 0) + '%';
     $('#count').textContent = `${done} / ${total}`;
   });
-  VIS.form.render(itemsBox, def, cycle);
+  VIS.form.render(itemsBox, def, cycle, vehicle);
   VIS.form.updateProgress(itemsBox);
 
   // --------------------------------------------------------------- オフライン
@@ -197,6 +197,11 @@
 
     const data = VIS.form.collect(itemsBox, def, cycle);
 
+    if (VIS.form.targetOptions(def.cycles[cycle]).length && !data.target) {
+      util.toast('対象車種を選択してください', 'warn');
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      return;
+    }
     if (Object.values(data.preChecks).some(v => !v.value)) {
       util.toast('備品確認（車検証・三角停止板）を選択してください', 'warn');
       window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -233,6 +238,7 @@
         shakenExpiry:     $('#shakenExpiry').value || '',
         shakenOdometer:   $('#shakenOdometer').value ? Number($('#shakenOdometer').value) : null,
         remarks:          $('#remarks').value.trim(),
+        target:           data.target,
         preChecks:        data.preChecks,
         results:          data.results,
         summary:          data.summary,
