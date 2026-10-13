@@ -1,0 +1,90 @@
+[
+  {
+    "vehicleId": "DC2-0001",
+    "vehicleType": "2tダンプカー",
+    "inspectionCycle": "3month",
+    "plateNumber": "デモ100わ1",
+    "modelCode": "DEMO-MODEL",
+    "chassisNo": "SAMPLE-0000001",
+    "maker": "デモ",
+    "branch": "デモ営業所",
+    "demo": true
+  },
+  {
+    "vehicleId": "DC4-0002",
+    "vehicleType": "4tダンプカー",
+    "inspectionCycle": "3month",
+    "plateNumber": "デモ100わ2",
+    "modelCode": "DEMO-MODEL",
+    "chassisNo": "SAMPLE-0000002",
+    "maker": "デモ",
+    "branch": "デモ営業所",
+    "demo": true
+  },
+  {
+    "vehicleId": "UC4-0003",
+    "vehicleType": "4tユニック車",
+    "inspectionCycle": "3month",
+    "plateNumber": "デモ100わ3",
+    "modelCode": "DEMO-MODEL",
+    "chassisNo": "SAMPLE-0000003",
+    "maker": "デモ",
+    "branch": "デモ営業所",
+    "demo": true
+  },
+  {
+    "vehicleId": "WS4-0004",
+    "vehicleType": "4t散水車",
+    "inspectionCycle": "3month",
+    "plateNumber": "デモ100わ4",
+    "modelCode": "DEMO-MODEL",
+    "chassisNo": "SAMPLE-0000004",
+    "maker": "デモ",
+    "branch": "デモ営業所",
+    "demo": true
+  },
+  {
+    "vehicleId": "VAN-0005",
+    "vehicleType": "ライトバン",
+    "inspectionCycle": "3month",
+    "plateNumber": "デモ100わ5",
+    "modelCode": "DEMO-MODEL",
+    "chassisNo": "SAMPLE-0000005",
+    "maker": "デモ",
+    "branch": "デモ営業所",
+    "demo": true
+  },
+  {
+    "vehicleId": "KTC-0006",
+    "vehicleType": "軽トラック",
+    "inspectionCycle": "6month",
+    "plateNumber": "デモ100わ6",
+    "modelCode": "DEMO-MODEL",
+    "chassisNo": "SAMPLE-0000006",
+    "maker": "デモ",
+    "branch": "デモ営業所",
+    "demo": true
+  },
+  {
+    "vehicleId": "CAR-0007",
+    "vehicleType": "乗用車",
+    "inspectionCycle": "6month",
+    "plateNumber": "デモ100わ7",
+    "modelCode": "DEMO-MODEL",
+    "chassisNo": "SAMPLE-0000007",
+    "maker": "デモ",
+    "branch": "デモ営業所",
+    "demo": true
+  },
+  {
+    "vehicleId": "SL12-0205",
+    "vehicleType": "高所作業車 12m",
+    "inspectionCycle": "3month",
+    "plateNumber": "富山800わ906",
+    "modelCode": "SK12C1FN 鉄ﾊﾞｹｯﾄ",
+    "chassisNo": "812957",
+    "maker": "ｱｲﾁ",
+    "branch": "新潟北部",
+    "demo": false
+  }
+]

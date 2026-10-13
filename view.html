@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#12508f">
+<!-- iPhone：ホーム画面に追加したときアプリのように全画面で開く -->
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="法定点検">
+<meta name="format-detection" content="telephone=no">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<title>点検履歴 - 車両法定点検</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<div class="appbar">
+  <a class="back" href="#" id="back">&#8592;</a>
+  <h1>点検履歴</h1>
+  <span class="env" id="env-label">―</span>
+</div>
+
+<main>
+
+  <div id="content"><p class="muted">読み込み中…</p></div>
+</main>
+
+<script src="config/app-config.js"></script>
+<script src="config/firebase-config.js"></script>
+<script src="vendor/firebase-app-compat.js"></script>
+<script src="vendor/firebase-firestore-compat.js"></script>
+<script src="vendor/firebase-storage-compat.js"></script>
+<script src="src/common/util.js"></script>
+<script src="src/storage/StorageAdapter.js"></script>
+<script src="src/storage/LocalStorageAdapter.js"></script>
+<script src="src/storage/FirebaseStorageAdapter.js"></script>
+<script src="src/auth/AuthProvider.js"></script>
+<script src="src/storage/storageFactory.js"></script>
+<script src="src/form/formRenderer.js"></script>
+<script src="src/pdf/pdfGenerator.js"></script>
+<script>
+/* ---------------------------------------------------------------------------
+ * 点検履歴（社員向け・読み取り専用）
+ *   直近の点検記録簿を表示し、車載用コピーを印刷・共有できるようにする。
+ *   第三者（警察・保険会社）へのオンライン公開はしない方針（車載の紙コピーで対応）。
+ *   このページからは書き込みを一切行いません。
+ * ------------------------------------------------------------------------ */
+(async function () {
+  const VIS = window.VIS, util = VIS.util, $ = util.$;
+  await VIS.ready();
+  $('#env-label').textContent = VIS.storage.name;
+
+  const id  = util.normalizeVehicleId(util.param('id'));
+  const box = $('#content');
+  $('#back').href = `vehicle.html?id=${encodeURIComponent(id)}`;
+
+  if (!id) {
+    box.innerHTML = '<div class="banner err">管理番号が指定されていません。</div>';
+    return;
+  }
+
+  const vehicle = await VIS.storage.getVehicle(id);
+  if (!vehicle) {
+    box.innerHTML = `<div class="banner err">「${util.esc(id)}」は車両マスタに登録されていません。</div>`;
+    return;
+  }
+
+  const history = await VIS.storage.listInspections(id, VIS.config.historyLimit);
+  const latest  = history[0] || null;
+
+  const doneBanner = util.param('done')
+    ? '<div class="banner info">点検記録を保存しました。<b>車載用コピーを印刷して、車両に搭載してください。</b></div>' : '';
+
+  if (!latest) {
+    box.innerHTML = `
+      ${doneBanner}
+      ${vehicleHead(vehicle)}
+      <div class="card"><div class="verdict none">この車両の点検記録はまだ登録されていません</div></div>`;
+    return;
+  }
+
+  // ---------------------------------------------------------- 直近の点検記録
+  const isOk = latest.summary.overall === '良好';
+  const pdfUrl = await VIS.storage.resolveFileUrl(latest.pdfUrl);
+
+
+  const actionList = (latest.summary.actionItems || []);
+
+  box.innerHTML = `
+    ${doneBanner}
+    ${vehicleHead(vehicle)}
+
+    <div class="card">
+      <h2>直近の法定点検</h2>
+      <div class="verdict ${isOk ? 'ok' : 'ng'}">総合判定：${util.esc(latest.summary.overall)}</div>
+      <dl class="kv" style="margin-top:14px">
+        <dt>点検日時</dt><dd>${util.esc(util.formatDateTime(latest.inspectedAt))}</dd>
+        <dt>点検区分</dt><dd>${latest.inspectionCycle === '6month' ? '６ヶ月定期点検' : '３ヶ月定期点検'}</dd>
+        <dt>点検担当者</dt><dd>${util.esc(latest.inspectorName || '―')}</dd>
+        <dt>整備管理者</dt><dd>${util.esc(latest.supervisorName || '―')}</dd>
+        <dt>点検営業所</dt><dd>${util.esc(latest.branch || '―')}</dd>
+        <dt>走行距離</dt><dd>${latest.odometer != null ? util.esc(latest.odometer) + ' km' : '―'}</dd>
+        <dt>点検項目</dt><dd>全 ${latest.summary.total} 項目 / 整備実施 ${latest.summary.actionCount} 件</dd>
+      </dl>
+      ${latest.remarks ? `<p class="small" style="margin-top:12px"><b>所見：</b>${util.esc(latest.remarks)}</p>` : ''}
+    </div>
+
+    ${actionList.length ? `
+    <div class="card">
+      <h2>点検時に実施した整備</h2>
+      <ul class="list">${actionList.map(a => `<li>${util.esc(a)}</li>`).join('')}</ul>
+    </div>` : ''}
+
+    <div class="card">
+      <h2>点検記録簿</h2>
+      <div id="sheet-preview" class="sheet-preview"><p class="small muted center">記録簿を表示しています…</p></div>
+      ${pdfUrl
+        ? `<button type="button" class="btn" id="btn-share">車載用コピーを印刷・共有</button>
+           <a class="btn secondary" href="${util.esc(pdfUrl)}" target="_blank" rel="noopener">PDFを開く</a>`
+        : '<p class="muted small">PDFは登録されていません。</p>'}
+    </div>
+
+
+    <div class="card">
+      <h2>これまでの点検</h2>
+      <ul class="list">
+        ${history.map(h => `
+          <li>
+            <b>${util.esc(util.formatDateTime(h.inspectedAt))}</b>
+            　<span class="${h.summary.overall === '良好' ? 'muted' : ''}"
+                   style="${h.summary.overall === '良好' ? '' : 'color:#c65500;font-weight:600'}">
+              ${util.esc(h.summary.overall)}</span>
+            <div class="small muted">${util.esc(h.inspectorName || '')}
+              ${h.summary.actionCount ? `／整備実施 ${h.summary.actionCount} 件` : ''}</div>
+          </li>`).join('')}
+      </ul>
+    </div>
+
+    <p class="center small muted">
+      保存先：${util.esc(VIS.storage.name)}　／　保存した記録は書き換えできません
+    </p>
+  `;
+
+  // ------------------------------------------------ 車載用コピーの印刷・共有
+  // スマホの「共有」画面を開き、印刷・LINE・メール・ファイル保存などに送る。
+  // iPhoneは「共有」を押した直後でないと開けない決まりがあるため、
+  // PDFファイルは画面を開いた時点で先に用意しておく。
+  const shareBtn = document.getElementById('btn-share');
+  if (shareBtn) {
+    const d = String(latest.inspectedAt || '').slice(0, 10).replace(/-/g, '');
+    const fileName = `点検記録簿_${vehicle.vehicleId}_${d}.pdf`;
+    let pdfFile = null;
+    fetch(pdfUrl).then(r => r.blob())
+      .then(b => { pdfFile = new File([b], fileName, { type: 'application/pdf' }); })
+      .catch(e => console.warn('PDFの準備に失敗', e));
+
+    shareBtn.addEventListener('click', async () => {
+      if (pdfFile && navigator.canShare && navigator.canShare({ files: [pdfFile] })) {
+        try {
+          await navigator.share({ files: [pdfFile], title: fileName });
+        } catch (e) {
+          if (e.name !== 'AbortError') util.toast('共有できませんでした：' + e.message, 'err');
+        }
+      } else {
+        // 共有に対応していない端末（PCなど）：PDFを開き、そこから印刷・保存してもらう
+        window.open(pdfUrl, '_blank', 'noopener');
+      }
+    });
+  }
+
+  // -------------------------------------------------------- 記録簿のプレビュー
+  // スマホのブラウザはPDFの埋め込み表示がほぼできない（Androidは表示不可）。
+  // そこで、PDFと同じ描画処理で記録簿を画像にして表示する（ピンチで拡大できる）。
+  // 正式な記録は保存済みのPDFで、下の「PDFを開く」から開ける。
+  (async () => {
+    const holder = document.getElementById('sheet-preview');
+    try {
+      const def = await VIS.form.loadDefinition();
+      const canvas = await VIS.pdf.renderPage(latest, vehicle, def);
+      const img = new Image();
+      img.alt = '点検記録簿';
+      img.src = canvas.toDataURL('image/jpeg', 0.85);
+      canvas.width = 0; canvas.height = 0;   // iPhoneのメモリ節約
+      holder.replaceChildren(img);
+    } catch (e) {
+      console.warn('記録簿の表示に失敗', e);
+      holder.innerHTML = '<p class="small muted">記録簿を表示できませんでした。下のボタンからPDFを開いてください。</p>';
+    }
+  })();
+
+  function vehicleHead(v) {
+    return `
+      <div class="vehicle-head">
+        <div class="vid">${util.esc(v.vehicleId)}</div>
+        <div class="vtype">${util.esc(v.vehicleType)}　/　${util.esc(v.plateNumber || '')}</div>
+      </div>
+      <div class="card">
+        <dl class="kv">
+          <dt>型式・車台番号</dt><dd>${util.esc([v.modelCode, v.chassisNo].filter(Boolean).join(' ') || '―')}</dd>
+          <dt>メーカー</dt><dd>${util.esc(v.maker || '―')}</dd>
+          <dt>営業所</dt><dd>${util.esc(v.branch || '―')}</dd>
+        </dl>
+      </div>`;
+  }
+})();
+</script>
+</body>
+</html>

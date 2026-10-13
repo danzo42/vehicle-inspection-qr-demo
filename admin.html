@@ -1,0 +1,434 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#12508f">
+<!-- iPhone：ホーム画面に追加したときアプリのように全画面で開く -->
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="法定点検">
+<meta name="format-detection" content="telephone=no">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<title>管理メニュー - 車両法定点検</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="stylesheet" href="css/style.css">
+<style>
+  .qr-out { text-align:center; padding:16px; background:#fff; border-radius:8px; }
+  .qr-out canvas, .qr-out img { max-width: 260px; }
+  .qr-caption { font-size:20px; font-weight:700; letter-spacing:.08em; margin-top:8px; }
+  .test-row { display:flex; align-items:center; gap:10px; padding:8px 0; border-top:1px solid var(--line); }
+  .test-row:first-child { border-top:none; }
+  .test-row .st { width:28px; font-size:18px; text-align:center; }
+  .test-row .nm { flex:1; font-size:14px; }
+  .test-row .rs { font-size:13px; color:var(--muted); text-align:right; }
+  .ok-txt { color:#1b7f3b; font-weight:700; }
+  .ng-txt { color:#c62828; font-weight:700; }
+</style>
+</head>
+<body>
+
+<div class="appbar">
+  <a class="back" href="index.html">&#8592;</a>
+  <h1>管理メニュー</h1>
+  <span class="env" id="env-label">―</span>
+</div>
+
+<main>
+
+  <div class="card">
+    <h2>接続状況</h2>
+    <dl class="kv">
+      <dt>保存先</dt><dd id="st-storage">―</dd>
+      <dt>登録済み車両</dt><dd id="st-count">―</dd>
+      <dt>未送信の点検</dt><dd id="st-pending">―</dd>
+      <dt>通信状態</dt><dd id="st-online">―</dd>
+    </dl>
+    <p class="small muted" id="st-note"></p>
+  </div>
+
+  <!-- ================================================================= -->
+  <div class="card" id="card-import">
+    <h2>① 車両マスタの取込</h2>
+    <p class="small muted">
+      <code>tools\convert-master.ps1</code> が作った <code>vehicles.json</code> を取り込みます。<br>
+      同じ管理番号は上書き更新されます（点検記録は消えません）。
+    </p>
+    <button class="btn" id="btn-import-bundled">同梱の vehicles.json を取り込む</button>
+    <label class="field">
+      <span>別のファイルから取り込む（.json / .csv）</span>
+      <input type="file" id="import-file" accept=".json,.csv">
+    </label>
+    <div id="import-progress" class="small muted"></div>
+  </div>
+
+  <!-- ================================================================= -->
+  <div class="card">
+    <h2>② QRコードの動作テスト</h2>
+    <p class="small muted">
+      指定した管理番号でQRを生成し、そのQR画像をアプリのリーダーで読み直します。<br>
+      「生成 → 読み取り → 車両マスタ照合 → 画面遷移」まで一気に検証できます。
+    </p>
+    <label class="field">
+      <span>テストする管理番号</span>
+      <input type="text" id="test-id" value="DC4-0737" autocapitalize="characters">
+    </label>
+    <button class="btn" id="btn-test">テストを実行</button>
+    <div id="test-out" style="margin-top:14px"></div>
+  </div>
+
+  <!-- ================================================================= -->
+  <div class="card">
+    <h2>③ QRシールの再発行</h2>
+    <p class="small muted">
+      <b>通常は使いません。</b> 既存のQRシールが破損・剥離したときだけ、
+      同じ管理番号の文字列で作り直すための保険機能です。<br>
+      生成されるQRの中身は管理番号のプレーンテキストで、既存シールと同じ仕様です。
+    </p>
+    <label class="field">
+      <span>管理番号</span>
+      <input type="text" id="qr-id" placeholder="DC4-0737" autocapitalize="characters">
+    </label>
+    <button class="btn secondary" id="btn-qr">QRを生成</button>
+    <div id="qr-out" class="qr-out" style="display:none">
+      <div id="qr-canvas"></div>
+      <div class="qr-caption" id="qr-caption"></div>
+      <button class="btn ghost" id="btn-qr-dl" style="margin-top:10px">PNGを保存</button>
+    </div>
+
+    <h3 class="unit" style="margin-top:22px">まとめて印刷（QRシートPDF）</h3>
+    <p class="small muted">
+      管理番号を1行に1つずつ入力すると、A4に12枚ずつ並べたPDFを作ります。
+      デモでは、ここで印刷したQRを読み取ってもらえます。
+    </p>
+    <textarea id="qr-list" rows="6" placeholder="DC4-0737&#10;SL12-0205"></textarea>
+    <button class="btn secondary" id="btn-qr-sheet">QRシートPDFを作る</button>
+  </div>
+
+  <!-- ================================================================= -->
+  <div class="card" id="card-flush">
+    <h2>④ 保留データの手動送信</h2>
+    <button class="btn secondary" id="btn-flush">未送信の点検データを今すぐ送信</button>
+  </div>
+
+  <div class="card">
+    <h2 id="wipe-title">⑤ 検証データの削除</h2>
+    <p class="small muted" id="wipe-note">この端末に保存したデータ（車両マスタ・点検記録・保留分）を消します。</p>
+    <button class="btn ghost" id="btn-wipe">この端末のデータを削除</button>
+  </div>
+
+</main>
+
+<script src="config/app-config.js"></script>
+<script src="config/firebase-config.js"></script>
+<script src="vendor/firebase-app-compat.js"></script>
+<script src="vendor/firebase-firestore-compat.js"></script>
+<script src="vendor/firebase-storage-compat.js"></script>
+<script src="vendor/html5-qrcode.min.js"></script>
+<script src="vendor/qrcode.min.js"></script>
+<script src="vendor/jspdf.umd.min.js"></script>
+<script src="src/common/util.js"></script>
+<script src="src/storage/StorageAdapter.js"></script>
+<script src="src/storage/LocalStorageAdapter.js"></script>
+<script src="src/storage/FirebaseStorageAdapter.js"></script>
+<script src="src/auth/AuthProvider.js"></script>
+<script src="src/storage/storageFactory.js"></script>
+<script src="src/offline/syncQueue.js"></script>
+<script src="src/qr/scanner.js"></script>
+<script>
+(async function () {
+  const VIS = window.VIS, util = VIS.util, $ = util.$;
+  await VIS.ready();
+
+  // ------------------------------------------------------------- 接続状況
+  async function refreshStatus() {
+    $('#env-label').textContent  = VIS.storage.name;
+    $('#st-storage').textContent = VIS.storage.name;
+    try {
+      $('#st-count').textContent = (await VIS.storage.countVehicles()) + ' 台';
+    } catch (e) {
+      // Firebaseでは全件数の取得をセキュリティルールで制限しているため取れないことがある
+      $('#st-count').textContent = '―（件数は取得できません）';
+    }
+    $('#st-pending').textContent = (await VIS.queue.count()) + ' 件';
+    $('#st-online').textContent  = util.isOnline() ? 'オンライン' : 'オフライン';
+    $('#st-note').textContent    = VIS.storage.fallbackReason
+      ? `※ 本来の保存先に接続できなかったため検証モードで動作しています：${VIS.storage.fallbackReason}`
+      : '';
+  }
+  await refreshStatus();
+
+  // ------------------------------------------------- ① 車両マスタの取込
+  async function doImport(vehicles) {
+    const box = $('#import-progress');
+    box.textContent = `取込中… 0 / ${vehicles.length}`;
+    await VIS.storage.importVehicles(vehicles, (done, total) => {
+      box.textContent = `取込中… ${done} / ${total}`;
+    });
+    box.textContent = `完了：${vehicles.length} 件を登録しました`;
+    util.toast(`車両マスタ ${vehicles.length} 件を取り込みました`, 'ok');
+    await refreshStatus();
+  }
+
+  $('#btn-import-bundled').addEventListener('click', async () => {
+    try {
+      const res = await fetch('master/vehicles.json', { cache: 'no-cache' });
+      if (!res.ok) throw new Error('同梱ファイルはありません（公開サイトには載せていません）。PCの data\\vehicles.json を下の「別のファイルから取り込む」で選んでください');
+      await doImport(await res.json());
+    } catch (e) {
+      util.toast(e.message, 'err');
+    }
+  });
+
+  $('#import-file').addEventListener('change', async e => {
+    const f = e.target.files[0];
+    if (!f) return;
+    try {
+      const text = await f.text();
+      const rows = f.name.toLowerCase().endsWith('.csv') ? parseCsv(text) : JSON.parse(text);
+      const cleaned = rows
+        .map(r => ({ ...r, vehicleId: util.normalizeVehicleId(r.vehicleId || r['管理番号']) }))
+        .filter(r => util.looksLikeVehicleId(r.vehicleId));
+      if (!cleaned.length) throw new Error('取り込める行がありませんでした（vehicleId 列を確認してください）');
+      await doImport(cleaned);
+    } catch (err) {
+      util.toast('取込に失敗：' + err.message, 'err');
+    }
+    e.target.value = '';
+  });
+
+  /** ごく簡単なCSVパーサ（1行目を見出しとして扱う） */
+  function parseCsv(text) {
+    const lines = text.replace(/^﻿/, '').split(/\r?\n/).filter(l => l.trim());
+    const split = l => {
+      const out = []; let cur = '', q = false;
+      for (let i = 0; i < l.length; i++) {
+        const c = l[i];
+        if (q) {
+          if (c === '"' && l[i + 1] === '"') { cur += '"'; i++; }
+          else if (c === '"') q = false;
+          else cur += c;
+        } else if (c === '"') q = true;
+        else if (c === ',') { out.push(cur); cur = ''; }
+        else cur += c;
+      }
+      out.push(cur);
+      return out;
+    };
+    const head = split(lines[0]);
+    return lines.slice(1).map(l => {
+      const cells = split(l), o = {};
+      head.forEach((h, i) => { o[h.trim()] = (cells[i] || '').trim(); });
+      return o;
+    });
+  }
+
+  // ------------------------------------------- ② QRコードの動作テスト
+  $('#btn-test').addEventListener('click', async () => {
+    const targetId = util.normalizeVehicleId($('#test-id').value);
+    const out = $('#test-out');
+    const rows = [];
+    const push = (name, ok, detail) => {
+      rows.push({ name, ok, detail });
+      out.innerHTML = rows.map(r => `
+        <div class="test-row">
+          <span class="st">${r.ok === null ? '…' : (r.ok ? '✅' : '❌')}</span>
+          <span class="nm">${util.esc(r.name)}</span>
+          <span class="rs ${r.ok ? 'ok-txt' : (r.ok === false ? 'ng-txt' : '')}">${util.esc(r.detail || '')}</span>
+        </div>`).join('');
+    };
+
+    try {
+      // 1. 既存シールと同じ仕様でQRを作る（中身は管理番号のプレーンテキスト）
+      const dataUrl = await makeQrDataUrl(targetId);
+      push('① QRコードを生成（中身＝プレーンテキスト）', true, targetId);
+
+      // 2. アプリのリーダーで読み直す
+      const blob = await (await fetch(dataUrl)).blob();
+      const file = new File([blob], 'qr.png', { type: 'image/png' });
+      const decoded = await VIS.QrScanner.decodeFile(file);
+      push('② アプリのQRリーダーで読み取り', decoded.rawText === targetId, `読取値: ${decoded.rawText}`);
+
+      // 3. 正規化（空白・全角・小文字・URL形式のゆらぎを吸収）
+      push('③ 車両IDへの正規化', decoded.vehicleId === targetId, decoded.vehicleId);
+
+      // 4. 車両マスタと照合
+      const vehicle = await VIS.storage.getVehicle(decoded.vehicleId);
+      push('④ 車両マスタとの照合', !!vehicle,
+           vehicle ? `${vehicle.vehicleType} / ${vehicle.plateNumber}` : 'マスタに存在しません');
+
+      if (vehicle) {
+        // 5. ゆらぎパターンの吸収も確認
+        const variants = [
+          ' ' + targetId + '\n',
+          targetId.toLowerCase(),
+          targetId.replace(/[A-Z0-9]/g, c => String.fromCharCode(c.charCodeAt(0) + 0xFEE0)).replace('-', '－'),
+          'https://example.com/v/' + targetId
+        ];
+        const allOk = variants.every(v => util.normalizeVehicleId(v) === targetId);
+        push('⑤ 読み取りゆらぎの吸収（空白・小文字・全角・URL形式）', allOk, allOk ? '4パターンOK' : '要確認');
+
+        out.insertAdjacentHTML('beforeend', `
+          <div class="qr-out" style="margin-top:12px">
+            <img src="${dataUrl}" alt="テスト用QR">
+            <div class="qr-caption">${util.esc(targetId)}</div>
+            <p class="small muted">このQRを画面に表示して、スマホのカメラ読み取りも試せます。</p>
+          </div>
+          <a class="btn" href="vehicle.html?id=${encodeURIComponent(targetId)}">読み取り後の画面を開く</a>`);
+      }
+    } catch (e) {
+      push('テスト中にエラー', false, e.message);
+    }
+  });
+
+  /** 管理番号からQRのPNG(dataURL)を作る */
+  function makeQrDataUrl(text, size) {
+    return new Promise((resolve, reject) => {
+      const holder = document.createElement('div');
+      holder.style.display = 'none';
+      document.body.appendChild(holder);
+      try {
+        new QRCode(holder, {
+          text: text,
+          width:  size || 480,
+          height: size || 480,
+          correctLevel: QRCode.CorrectLevel.M   // 現場のシールを想定した誤り訂正レベル
+        });
+        // qrcodejs は canvas または img を作る
+        setTimeout(() => {
+          const cv = holder.querySelector('canvas');
+          const im = holder.querySelector('img');
+          const url = cv ? cv.toDataURL('image/png') : (im ? im.src : null);
+          holder.remove();
+          url ? resolve(url) : reject(new Error('QRを生成できませんでした'));
+        }, 60);
+      } catch (e) { holder.remove(); reject(e); }
+    });
+  }
+
+  // ------------------------------------------------- ③ QRシールの再発行
+  let lastQrUrl = '', lastQrId = '';
+  $('#btn-qr').addEventListener('click', async () => {
+    const id = util.normalizeVehicleId($('#qr-id').value);
+    if (!util.looksLikeVehicleId(id)) { util.toast('管理番号の形式が正しくありません', 'warn'); return; }
+    lastQrUrl = await makeQrDataUrl(id, 600);
+    lastQrId  = id;
+    $('#qr-canvas').innerHTML = `<img src="${lastQrUrl}" alt="QR">`;
+    $('#qr-caption').textContent = id;
+    $('#qr-out').style.display = 'block';
+  });
+  $('#btn-qr-dl').addEventListener('click', () => {
+    if (!lastQrUrl) return;
+    const a = document.createElement('a');
+    a.href = lastQrUrl;
+    a.download = `QR_${lastQrId}.png`;
+    a.click();
+  });
+
+  // ------------------------------------------- ③ QRシート（まとめて印刷）
+  // デモ版など登録台数が少ないときは、登録済みの全車両を最初から入れておく
+  try {
+    const all = await VIS.storage.searchVehicles('', 30);
+    if (all.length && all.length < 30) $('#qr-list').value = all.map(v => v.vehicleId).join('\n');
+  } catch (e) { /* 一覧が取れない保存先では手入力 */ }
+
+  $('#btn-qr-sheet').addEventListener('click', async () => {
+    const ids = $('#qr-list').value.split(/\r?\n/)
+      .map(s => util.normalizeVehicleId(s)).filter(s => util.looksLikeVehicleId(s));
+    if (!ids.length) { util.toast('管理番号を入力してください', 'warn'); return; }
+    const btn = $('#btn-qr-sheet');
+    btn.disabled = true; btn.textContent = '作成中…';
+    try {
+      const blob = await makeQrSheetPdf(ids);
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      link.download = `QRシート_${ids.length}台.pdf`;
+      link.click();
+    } catch (e) {
+      util.toast('作成できませんでした：' + e.message, 'err');
+    } finally {
+      btn.disabled = false; btn.textContent = 'QRシートPDFを作る';
+    }
+  });
+
+  /** A4縦に 3列×4段＝12枚ずつQRを並べたPDFを作る（切り取り線つき） */
+  async function makeQrSheetPdf(ids) {
+    const MM = 200 / 25.4;                       // 200dpi
+    const W = Math.round(210 * MM), H = Math.round(297 * MM);
+    const COLS = 3, ROWS = 4, PER = COLS * ROWS;
+    const cellW = 190 / COLS, cellH = 277 / ROWS, QR = 40;
+    const FONT = '"Yu Gothic UI","Yu Gothic","Hiragino Sans","Noto Sans JP","Meiryo",sans-serif';
+    const loadImg = src => new Promise((ok, ng) => { const i = new Image(); i.onload = () => ok(i); i.onerror = ng; i.src = src; });
+
+    const { jsPDF } = window.jspdf;
+    const pdf = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait', compress: true });
+
+    for (let p = 0; p * PER < ids.length; p++) {
+      const c = document.createElement('canvas');
+      c.width = W; c.height = H;
+      const g = c.getContext('2d');
+      g.fillStyle = '#fff'; g.fillRect(0, 0, W, H);
+      g.textAlign = 'center'; g.textBaseline = 'middle';
+
+      const pageIds = ids.slice(p * PER, (p + 1) * PER);
+      for (let i = 0; i < pageIds.length; i++) {
+        const id = pageIds[i];
+        const x0 = 10 + (i % COLS) * cellW, y0 = 10 + Math.floor(i / COLS) * cellH;
+        const cx = (x0 + cellW / 2) * MM;
+
+        g.strokeStyle = '#bbb'; g.lineWidth = 0.2 * MM; g.setLineDash([2 * MM, 1.5 * MM]);
+        g.strokeRect(x0 * MM, y0 * MM, cellW * MM, cellH * MM);
+        g.setLineDash([]);
+
+        const qr = await loadImg(await makeQrDataUrl(id, 480));
+        g.imageSmoothingEnabled = false;             // QRの白黒をにじませない
+        g.drawImage(qr, (x0 + (cellW - QR) / 2) * MM, (y0 + 7) * MM, QR * MM, QR * MM);
+
+        g.fillStyle = '#000';
+        g.font = `bold ${Math.round(5.5 * MM)}px ${FONT}`;
+        g.fillText(id, cx, (y0 + 7 + QR + 6) * MM);
+        const v = await VIS.storage.getVehicle(id).catch(() => null);
+        g.fillStyle = '#555';
+        g.font = `${Math.round(3.4 * MM)}px ${FONT}`;
+        g.fillText(v ? (v.vehicleType || '') : '（車両マスタに未登録）', cx, (y0 + 7 + QR + 12.5) * MM);
+      }
+
+      if (p > 0) pdf.addPage();
+      pdf.addImage(c.toDataURL('image/png'), 'PNG', 0, 0, 210, 297, undefined, 'FAST');
+      c.width = 0; c.height = 0;
+    }
+    return pdf.output('blob');
+  }
+
+  // ------------------------------------------------- ④ 保留データの送信
+  $('#btn-flush').addEventListener('click', async () => {
+    const r = await VIS.queue.flush(msg => util.toast(msg, 'info'));
+    util.toast(`送信 ${r.sent} 件 / 失敗 ${r.failed} 件`, r.failed ? 'warn' : 'ok');
+    await refreshStatus();
+  });
+
+  // ------------------------------------------------- ⑤ 検証データの削除
+  if (VIS.isDemo()) {
+    // デモ版では車両マスタの取込・保留送信は使わない
+    $('#card-import').style.display = 'none';
+    $('#card-flush').style.display  = 'none';
+    $('#wipe-title').textContent = 'デモを最初からやり直す';
+    $('#wipe-note').textContent  = 'この端末に保存した点検記録を消し、デモ用の車両データを読み込み直します。';
+    $('#btn-wipe').textContent   = '最初からやり直す';
+    // QRテストの初期値を収録車両（実車があれば実車）にする
+    const demoRows = await VIS.storage.searchVehicles('', 30).catch(() => []);
+    const real = demoRows.find(v => v.demo === false) || demoRows[0];
+    if (real) $('#test-id').value = real.vehicleId;
+  }
+
+  $('#btn-wipe').addEventListener('click', async () => {
+    if (!confirm('この端末に保存した点検記録などをすべて削除します。よろしいですか？')) return;
+    await VIS.resetLocalData();
+    util.toast('削除しました。ページを再読み込みします', 'ok');
+    setTimeout(() => location.reload(), 800);
+  });
+})();
+</script>
+</body>
+</html>

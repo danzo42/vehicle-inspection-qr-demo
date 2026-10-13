@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#12508f">
+<!-- iPhone：ホーム画面に追加したときアプリのように全画面で開く -->
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="法定点検">
+<meta name="format-detection" content="telephone=no">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<title>点検入力 - 車両法定点検</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<div class="appbar">
+  <a class="back" href="#" id="back">&#8592;</a>
+  <h1 id="title">点検入力</h1>
+  <span class="env" id="env-label">―</span>
+</div>
+
+<main>
+  <div id="offline-banner" class="banner warn" style="display:none">
+    オフラインです。入力は端末に保存され、オンラインに戻ったとき自動で送信されます。
+  </div>
+
+  <div id="vehicle-box"></div>
+
+  <form id="form">
+    <div class="card">
+      <h2>点検情報</h2>
+      <label class="field">
+        <span>点検担当者名<span class="required-mark">*</span></span>
+        <input type="text" id="inspectorName" required maxlength="40" autocomplete="name">
+      </label>
+      <label class="field">
+        <span>整備管理者名</span>
+        <input type="text" id="supervisorName" maxlength="40">
+      </label>
+      <label class="field">
+        <span>点検営業所</span>
+        <input type="text" id="branch" maxlength="40">
+      </label>
+      <label class="field">
+        <span>点検時走行距離（km）</span>
+        <input type="number" id="odometer" inputmode="numeric" min="0" max="9999999">
+      </label>
+      <div class="btn-row">
+        <label class="field" style="flex:1">
+          <span>車検満了日</span>
+          <input type="date" id="shakenExpiry">
+        </label>
+        <label class="field" style="flex:1">
+          <span>車検時走行距離（km）</span>
+          <input type="number" id="shakenOdometer" inputmode="numeric" min="0" max="9999999">
+        </label>
+      </div>
+      <div class="btn-row">
+        <label class="field" style="flex:1">
+          <span>前回点検日</span>
+          <input type="date" id="previousInspectionDate">
+        </label>
+        <label class="field" style="flex:1">
+          <span>前回点検時走行距離（km）</span>
+          <input type="number" id="previousOdometer" inputmode="numeric" min="0" max="9999999">
+        </label>
+      </div>
+      <p class="small muted" id="prefill-note">点検日時は送信時に自動で記録されます。</p>
+    </div>
+
+    <div id="items"></div>
+
+
+    <div class="card">
+      <h2>所見・特記事項</h2>
+      <textarea id="remarks" rows="4" maxlength="1000" placeholder="全体を通しての所見があれば入力してください"></textarea>
+    </div>
+  </form>
+</main>
+
+<div class="progress-bar">
+  <div class="meter"><i id="meter"></i></div>
+  <span class="count" id="count">0 / 0</span>
+  <button class="btn" id="submit">点検を完了</button>
+</div>
+
+<script src="config/app-config.js"></script>
+<script src="config/firebase-config.js"></script>
+<script src="vendor/firebase-app-compat.js"></script>
+<script src="vendor/firebase-firestore-compat.js"></script>
+<script src="vendor/firebase-storage-compat.js"></script>
+<script src="vendor/jspdf.umd.min.js"></script>
+<script src="src/common/util.js"></script>
+<script src="src/storage/StorageAdapter.js"></script>
+<script src="src/storage/LocalStorageAdapter.js"></script>
+<script src="src/storage/FirebaseStorageAdapter.js"></script>
+<script src="src/auth/AuthProvider.js"></script>
+<script src="src/storage/storageFactory.js"></script>
+<script src="src/offline/syncQueue.js"></script>
+<script src="src/form/formRenderer.js"></script>
+<script src="src/pdf/pdfGenerator.js"></script>
+<script>
+/* ---------------------------------------------------------------------------
+ * 点検入力画面
+ *   1) 車両マスタから車両情報を読み、点検区分（3ヶ月/6ヶ月）を決める
+ *   2) JSON定義からフォームを自動生成する
+ *   3) 送信時にPDFを作り、保存先アダプタに預ける
+ *      オフラインなら端末に保留し、オンライン復帰時に自動送信する
+ * ------------------------------------------------------------------------ */
+(async function () {
+  const VIS = window.VIS, util = VIS.util, $ = util.$;
+  await VIS.ready();
+  $('#env-label').textContent = VIS.storage.name;
+
+  // 将来ここに認証を挟めるようにしてある（今は認証なし）
+  await VIS.auth.requireSignIn();
+
+  const id = util.normalizeVehicleId(util.param('id'));
+  $('#back').href = `vehicle.html?id=${encodeURIComponent(id)}`;
+
+  const vehicle = await VIS.storage.getVehicle(id);
+  if (!vehicle) {
+    document.querySelector('main').innerHTML =
+      `<div class="banner err">「${util.esc(id)}」は車両マスタに登録されていません。</div>`;
+    document.querySelector('.progress-bar').style.display = 'none';
+    return;
+  }
+
+  const cycle = vehicle.inspectionCycle === '6month' ? '6month' : '3month';
+  const def   = await VIS.form.loadDefinition();
+  $('#title').textContent = def.cycles[cycle].title;
+
+  $('#vehicle-box').innerHTML = `
+    <div class="vehicle-head">
+      <div class="vid">${util.esc(vehicle.vehicleId)}</div>
+      <div class="vtype">${util.esc(vehicle.vehicleType)}　/　${util.esc(vehicle.plateNumber || '')}</div>
+    </div>
+    <div class="banner info small">${util.esc(def.cycles[cycle].omitNote)}</div>`;
+
+  $('#branch').value = vehicle.branch || '';
+
+  // 前回の点検記録があれば、記録簿の「前回点検日」「前回点検時走行距離」と
+  // 車検の情報・整備管理者を引き継ぐ（変わっていれば手で直せる）
+  const previous = await VIS.storage.getLatestInspection(vehicle.vehicleId).catch(() => null);
+  if (previous) {
+    $('#previousInspectionDate').value = String(previous.inspectedAt || '').slice(0, 10);
+    if (previous.odometer != null)       $('#previousOdometer').value = previous.odometer;
+    if (previous.shakenExpiry)           $('#shakenExpiry').value     = previous.shakenExpiry;
+    if (previous.shakenOdometer != null) $('#shakenOdometer').value   = previous.shakenOdometer;
+    if (previous.supervisorName)         $('#supervisorName').value   = previous.supervisorName;
+    $('#prefill-note').textContent =
+      `前回（${util.formatDateTime(previous.inspectedAt)}）の記録から一部を自動入力しました。点検日時は送信時に自動で記録されます。`;
+  }
+
+  // ------------------------------------------------------------- フォーム生成
+  const itemsBox = $('#items');
+  // 先に進捗の受け取り口を用意してから描画する（描画直後の1回目を取りこぼさないため）
+  itemsBox.addEventListener('vis:progress', e => {
+    const { done, total } = e.detail;
+    $('#meter').style.width = (total ? (done / total * 100) : 0) + '%';
+    $('#count').textContent = `${done} / ${total}`;
+  });
+  VIS.form.render(itemsBox, def, cycle);
+  VIS.form.updateProgress(itemsBox);
+
+  // --------------------------------------------------------------- オフライン
+  function updateOnlineBanner() {
+    $('#offline-banner').style.display = util.isOnline() ? 'none' : 'block';
+  }
+  window.addEventListener('online',  updateOnlineBanner);
+  window.addEventListener('offline', updateOnlineBanner);
+  updateOnlineBanner();
+  VIS.queue.autoFlush();
+
+  // 入力途中の内容が消えないよう、離脱時に警告
+  let dirty = false;
+  document.addEventListener('change', () => { dirty = true; });
+  window.addEventListener('beforeunload', e => {
+    if (dirty && !submitted) { e.preventDefault(); e.returnValue = ''; }
+  });
+
+  // ------------------------------------------------------------------- 送信
+  let submitted = false;
+  $('#submit').addEventListener('click', async () => {
+    const btn = $('#submit');
+
+    const inspectorName = $('#inspectorName').value.trim();
+    if (!inspectorName) {
+      util.toast('点検担当者名を入力してください', 'warn');
+      $('#inspectorName').focus();
+      return;
+    }
+
+    const data = VIS.form.collect(itemsBox, def, cycle);
+
+    if (Object.values(data.preChecks).some(v => !v.value)) {
+      util.toast('備品確認（車検証・三角停止板）を選択してください', 'warn');
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      return;
+    }
+    if (data.summary.unfilled > 0) {
+      util.toast(`未入力が ${data.summary.unfilled} 項目あります`, 'warn');
+      VIS.form.focusFirstUnfilled(itemsBox);
+      return;
+    }
+    if (!confirm(`点検を完了して保存します。\n\n総合判定：${data.summary.overall}\n整備実施：${data.summary.actionCount} 件\n\nよろしいですか？`)) {
+      return;
+    }
+
+    btn.disabled = true;
+    const setBusy = msg => { btn.textContent = msg; };
+
+    try {
+      const now = util.nowIso();
+      const record = {
+        inspectionId:     util.makeInspectionId(vehicle.vehicleId),
+        vehicleId:        vehicle.vehicleId,
+        vehicleType:      vehicle.vehicleType,
+        plateNumber:      vehicle.plateNumber || '',
+        inspectionCycle:  cycle,
+        inspectedAt:      now,
+        createdAt:        now,
+        inspectorName:    inspectorName,
+        supervisorName:   $('#supervisorName').value.trim(),
+        branch:           $('#branch').value.trim(),
+        odometer:         $('#odometer').value ? Number($('#odometer').value) : null,
+        previousInspectionDate: $('#previousInspectionDate').value || '',
+        previousOdometer: $('#previousOdometer').value ? Number($('#previousOdometer').value) : null,
+        shakenExpiry:     $('#shakenExpiry').value || '',
+        shakenOdometer:   $('#shakenOdometer').value ? Number($('#shakenOdometer').value) : null,
+        remarks:          $('#remarks').value.trim(),
+        preChecks:        data.preChecks,
+        results:          data.results,
+        summary:          data.summary,
+        appVersion:       '1.0.0'
+      };
+
+      // PDFは紙の記録簿と同じA4一枚
+      setBusy('PDFを作成中…');
+      const pdfBlob = await VIS.pdf.generate(record, vehicle, def);
+
+      if (util.isOnline()) {
+        setBusy('保存中…');
+        await VIS.storage.saveInspection(record, pdfBlob, setBusy);
+        submitted = true;
+        util.toast('点検記録を保存しました', 'ok');
+      } else {
+        await VIS.queue.enqueue(record, pdfBlob);
+        submitted = true;
+        util.toast('オフラインのため端末に保存しました。オンライン復帰時に自動送信します', 'warn');
+      }
+
+      location.href = `view.html?id=${encodeURIComponent(vehicle.vehicleId)}&done=1`;
+
+    } catch (e) {
+      console.error(e);
+      util.toast('保存に失敗しました：' + e.message, 'err');
+      btn.disabled = false;
+      btn.textContent = '点検を完了';
+    }
+  });
+})();
+</script>
+</body>
+</html>
