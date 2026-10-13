@@ -8,7 +8,7 @@
  *   ・点検日／車検満了日／前回点検日、各走行距離、点検営業所、整備管理者、YDEC№
  *   ・自動車登録番号／車台番号／車種、車検証・三角停止板の有無（○で囲む）
  *   ・点検項目は紙と同じ左右2列。省略できない項目は「太字＋下線＋黄色の□」
- *   ・□の中に判定記号（レ△×○ＡＴＣＬ）を記入。省略した項目は空欄
+ *   ・□の中に判定記号（レ△×○ＡＴＣＬ）を記入。該当なしは「／」、省略した項目は空欄
  *   ・凡例の下に、紙には無い「点検者・実施した整備・所見」欄を追加（電子記録として必要なため）
  *
 
@@ -343,7 +343,7 @@
           if (r && r.mark) {
             p.text(r.mark, bx + box / 2, cy, {
               size: Math.min(fontPt + 0.5, 11), bold: true, align: 'center',
-              color: r.code === 'OK' ? '#000' : RED
+              color: (r.code === 'OK' || r.code === 'NA') ? '#000' : RED   // 該当なし（／）は黒
             });
           }
         }
@@ -390,7 +390,7 @@
   // ---------------------------------------------------------------------------
   function drawLegend(p, def, y) {
     const codes = def.judgementCodes.filter(c => c.type !== 'skip');
-    const half = Math.ceil(codes.length / 2);
+    const half = Math.floor(codes.length / 2);   // 左に4つ（レ△×○）、右に残り（ＡＴＣＬ／）
     const h = 5;
     [[codes.slice(0, half), COL_LEFT], [codes.slice(half), COL_RIGHT]].forEach(([list, col]) => {
       const w = (col.x1 - col.x0) / list.length;
@@ -428,7 +428,7 @@
     parts.push(`点検者：${record.inspectorName || ''}　　記録日時：${VIS.util.formatDateTime(record.inspectedAt)}` +
                `　　総合判定：${s.overall || ''}${s.actionCount ? `（整備実施 ${s.actionCount} 件）` : ''}`);
 
-    const actions = (record.results || []).filter(r => r.code && r.code !== 'OK' && r.code !== 'SKIP');
+    const actions = (record.results || []).filter(r => r.code && !['OK', 'SKIP', 'NA'].includes(r.code));
     if (actions.length) {
       parts.push('実施した整備：' + actions.map(a =>
         `${a.unitName ? a.unitName + '／' : ''}${a.label} ${a.mark}${a.judgement}`

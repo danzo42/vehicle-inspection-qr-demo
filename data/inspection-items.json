@@ -10,8 +10,15 @@
     "  units[].items[]               … 実際にチェックする点検項目",
     "  items[].id                    … 保存用のキー。★一度運用を始めたら変更しないこと（過去記録と対応しなくなるため）",
     "  items[].label                 … 画面とPDFに出す文言",
+    "  units[].bulkNa                … true = 「まとめて該当なし」ボタンを出す（装置が付いていない車両がある中分類だけ）",
     "  items[].optional              … true = 記録簿で下線なし・白い□の項目（走行距離が規定以下なら省略可）",
-    "                                  省略できない項目（下線付き・黄色の□）は optional を書かない"
+    "                                  省略できない項目（下線付き・黄色の□）は optional を書かない",
+    "",
+    "判定の種類（judgementCodes の type）:",
+    "  good   … 良好（レ）",
+    "  action … 点検時に実施した整備（△修理 ×交換 ○分解 Ａ調整 Ｔ締付 Ｃ清掃 Ｌ給油水）",
+    "  skip   … 省略（走行距離が規定以下のとき。optional の項目だけ選べる）。記録簿では空欄",
+    "  na     … 該当なし（その装置が車両に無い。すべての項目で選べる）。記録簿では「／」"
   ],
 
   "judgementCodes": [
@@ -23,7 +30,8 @@
     { "code": "TIG",  "mark": "Ｔ", "label": "締付",   "type": "action" },
     { "code": "CLN",  "mark": "Ｃ", "label": "清掃",   "type": "action" },
     { "code": "LUB",  "mark": "Ｌ", "label": "給油水", "type": "action" },
-    { "code": "SKIP", "mark": "",   "label": "省略",   "type": "skip" }
+    { "code": "SKIP", "mark": "",   "label": "省略",   "type": "skip" },
+    { "code": "NA",   "mark": "／", "label": "該当なし", "type": "na" }
   ],
 
   "preChecks": [
@@ -52,7 +60,7 @@
         {
           "name": "かじ取り装置", "column": "left",
           "units": [
-            { "name": "パワーステアリング装置", "items": [
+            { "name": "パワーステアリング装置", "bulkNa": true, "items": [
               { "id": "steer_ps_belt", "label": "ベルトの緩み及び損傷" },
               { "id": "steer_ps_oil",  "label": "油漏れ及び油量", "optional": true }
             ]},
@@ -84,15 +92,15 @@
             { "name": "ブレーキ・チャンバ", "items": [
               { "id": "brake_chamber_stroke", "label": "ロッドのストローク" }
             ]},
-            { "name": "ブレーキドラム及びブレーキシュー", "items": [
+            { "name": "ブレーキドラム及びブレーキシュー", "bulkNa": true, "items": [
               { "id": "brake_drum_gap",  "label": "ドラムとライニングとの隙間" },
               { "id": "brake_shoe_wear", "label": "シューの摺動部分及びライニングの磨耗", "optional": true }
             ]},
-            { "name": "センターブレーキドラム及びライニング", "items": [
+            { "name": "センターブレーキドラム及びライニング", "bulkNa": true, "items": [
               { "id": "brake_center_mount", "label": "ドラムの取付けの緩み" },
               { "id": "brake_center_gap",   "label": "ドラムとライニングとの隙間" }
             ]},
-            { "name": "ブレーキディスク及びパッド", "items": [
+            { "name": "ブレーキディスク及びパッド", "bulkNa": true, "items": [
               { "id": "brake_disc_gap", "label": "ディスクとパッドの隙間", "optional": true },
               { "id": "brake_pad_wear", "label": "パッドの磨耗", "optional": true }
             ]}
@@ -114,7 +122,7 @@
             { "name": "リーフサスペンション", "items": [
               { "id": "susp_leaf_spring", "label": "スプリングの損傷" }
             ]},
-            { "name": "エアサスペンション", "items": [
+            { "name": "エアサスペンション", "bulkNa": true, "items": [
               { "id": "susp_air_leak",    "label": "エア漏れ" },
               { "id": "susp_air_bellows", "label": "ベローズの損傷", "optional": true },
               { "id": "susp_air_mount",   "label": "取付部及び連結部の緩み及び損傷", "optional": true }
@@ -127,7 +135,7 @@
         {
           "name": "動力伝達装置", "column": "right",
           "units": [
-            { "name": "クラッチ", "items": [
+            { "name": "クラッチ", "bulkNa": true, "items": [
               { "id": "drive_clutch_play",  "label": "ペダルの遊び及びきれた時の床板との隙間" },
               { "id": "drive_clutch_work",  "label": "作用" },
               { "id": "drive_clutch_fluid", "label": "液量" }
@@ -146,7 +154,7 @@
         {
           "name": "電気装置", "column": "right",
           "units": [
-            { "name": "点火装置", "items": [
+            { "name": "点火装置", "bulkNa": true, "items": [
               { "id": "elec_ign_timing", "label": "点火時期" },
               { "id": "elec_ign_plug",   "label": "点火プラグの状態", "optional": true }
             ]},
@@ -232,7 +240,7 @@
         {
           "name": "かじ取り装置", "column": "left",
           "units": [
-            { "name": "パワーステアリング装置", "items": [
+            { "name": "パワーステアリング装置", "bulkNa": true, "items": [
               { "id": "steer_ps_belt", "label": "ベルトの緩み及び損傷" }
             ]}
           ]
@@ -251,7 +259,7 @@
             { "name": "ホース及びパイプ", "items": [
               { "id": "brake_hose", "label": "漏れ、損傷及び取付状態" }
             ]},
-            { "name": "ブレーキドラム及びブレーキシュー", "items": [
+            { "name": "ブレーキドラム及びブレーキシュー", "bulkNa": true, "items": [
               { "id": "brake_drum_gap", "label": "ドラムとライニングとの隙間" }
             ]}
           ]
@@ -267,7 +275,7 @@
         {
           "name": "動力伝達装置", "column": "left",
           "units": [
-            { "name": "クラッチ", "items": [
+            { "name": "クラッチ", "bulkNa": true, "items": [
               { "id": "drive_clutch_play", "label": "ペダルの遊び及びきれた時の床板との隙間" },
               { "id": "drive_clutch_work", "label": "作用" }
             ]},
@@ -285,7 +293,7 @@
         {
           "name": "電気装置", "column": "right",
           "units": [
-            { "name": "点火装置", "items": [
+            { "name": "点火装置", "bulkNa": true, "items": [
               { "id": "elec_ign_timing", "label": "点火時期" },
               { "id": "elec_ign_plug",   "label": "点火プラグの状態", "optional": true }
             ]}

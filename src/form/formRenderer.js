@@ -57,7 +57,15 @@
       html.push(`<h2>${util.esc(group.name)}</h2>`);
 
       group.units.forEach(unit => {
-        if (unit.name) html.push(`<h3 class="unit">${util.esc(unit.name)}</h3>`);
+        // 中分類ごとにまとめる（「まとめて該当なし」で中の項目を一括で選べるように）
+        html.push('<div class="unit-block">');
+        if (unit.name) {
+          // 装置が付いていない車両がある中分類（定義で bulkNa: true）だけ「まとめて該当なし」を付ける
+          //（例：エアサスペンションの無い車、点火装置の無いディーゼル車、クラッチの無いAT車）
+          const naAll = unit.bulkNa && unit.items.length >= 2
+            ? '<button type="button" class="unit-na">まとめて該当なし</button>' : '';
+          html.push(`<h3 class="unit"><span>${util.esc(unit.name)}</span>${naAll}</h3>`);
+        }
 
         unit.items.forEach(item => {
           const optTag = item.optional ? '<span class="badge-opt">省略可</span>' : '';
@@ -70,13 +78,15 @@
                   </label>`;
 
           // スマホで片手でも速く入力できるよう、
-          //   1段目：「レ 良好」（大きく）＋「省略」＋「整備 ▾」
+          //   1段目：「レ 良好」（大きく）＋「省略」＋「該当なし」＋「整備 ▾」
           //   2段目：△修理 ×交換 ○分解 Ａ調整 Ｔ締付 Ｃ清掃 Ｌ給油水（「整備 ▾」を押すと開く）
           // の2段に分けている。ほとんどの項目は「良好」を1回押すだけで済む。
           // 「省略」を選べるのは記録簿で下線の無い（白い□の）項目だけ。
           // 下線付き（黄色の□）の項目は走行距離に関係なく必ず点検する。
+          // 「該当なし」はその装置が車両に無い場合で、すべての項目で選べる。
           const good    = codes.filter(c => c.type === 'good');
           const skip    = item.optional ? codes.filter(c => c.type === 'skip') : [];
+          const na      = codes.filter(c => c.type === 'na');
           const actions = codes.filter(c => c.type === 'action');
           html.push(`
             <div class="item${item.optional ? '' : ' required'}" data-item-id="${util.esc(item.id)}">
@@ -84,6 +94,7 @@
               <div class="judge">
                 ${good.map(radio).join('')}
                 ${skip.map(radio).join('')}
+                ${na.map(radio).join('')}
                 <button type="button" class="judge-more" aria-expanded="false">整備 ▾</button>
               </div>
               <div class="judge-actions" hidden>
@@ -91,6 +102,7 @@
               </div>
             </div>`);
         });
+        html.push('</div>');
       });
 
       html.push('</section>');
@@ -112,6 +124,14 @@
         updateProgress(container);
       });
       card.querySelector('h2').insertAdjacentElement('afterend', btn);
+    });
+
+    // 「まとめて該当なし」：その中分類の項目をすべて「該当なし」にする
+    container.addEventListener('click', e => {
+      const btn = e.target.closest('.unit-na');
+      if (!btn) return;
+      util.$$('.item input[value="NA"]', btn.closest('.unit-block')).forEach(r => { r.checked = true; });
+      updateProgress(container);
     });
 
     // 「整備 ▾」を押すと整備記号の段を開く／閉じる
@@ -161,7 +181,7 @@
     items.forEach(it => {
       it.classList.toggle('filled', !!it.querySelector('input[type=radio]:checked'));
       const checked = it.querySelector('input[type=radio]:checked');
-      it.classList.toggle('warn', !!checked && checked.value !== 'OK' && checked.value !== 'SKIP');
+      it.classList.toggle('warn', !!checked && !['OK', 'SKIP', 'NA'].includes(checked.value));
       syncItem(it);
     });
     const ev = new CustomEvent('vis:progress', { detail: { done: done.length, total: items.length } });
@@ -206,6 +226,7 @@
     const unfilled = results.filter(r => !r.code);
     const actions  = results.filter(r => r.code && codeMap[r.code].type === 'action');
     const skipped  = results.filter(r => r.code === 'SKIP');
+    const notApplicable = results.filter(r => r.code === 'NA');
 
     return {
       preChecks,
@@ -215,6 +236,7 @@
         unfilled:     unfilled.length,
         actionCount:  actions.length,
         skipCount:    skipped.length,
+        naCount:      notApplicable.length,
         // 記録簿の△修理・×交換・Ａ調整などは「点検時に実施した整備」を表す記号。
         // 未解決の不具合ではないので「要整備」ではなく「整備実施あり」と表記する。
         overall:      actions.length === 0 ? '良好' : '整備実施あり',

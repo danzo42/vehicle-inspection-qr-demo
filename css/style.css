@@ -148,9 +148,11 @@ input[type=text], input[type=number], input[type=date], select, textarea {
   padding: 6px 8px; font-size: 15px; cursor: pointer; background: #fff; color: var(--text);
   user-select: none; -webkit-user-select: none;
 }
-.judge .judge-good { flex: 2; font-size: 16px; }   /* 一番よく押す「良好」を大きく */
-.judge .judge-skip { flex: 1; }
-.judge-more { flex: 1.2; font-family: inherit; font-weight: 600; color: var(--muted); white-space: nowrap; font-size: 14px; }
+.judge .judge-good { flex: 1.6; font-size: 16px; }   /* 一番よく押す「良好」を大きく */
+.judge .judge-skip,
+.judge .judge-na   { flex: 1; font-size: 13px; padding: 6px 4px; white-space: nowrap; }
+.judge .judge-na .mark { display: none; }            /* 狭いので「該当なし」の文字だけ出す */
+.judge-more { flex: 1.1; font-family: inherit; font-weight: 600; color: var(--muted); white-space: nowrap; font-size: 13px; padding: 6px 4px; }
 .judge-more.selected { background: var(--warn); border-color: var(--warn); color: #fff; }
 
 .judge-actions {
@@ -166,6 +168,15 @@ input[type=text], input[type=number], input[type=date], select, textarea {
 .judge-good.on             { background: var(--ok);      border-color: var(--ok); }
 .judge-action.on           { background: var(--warn);    border-color: var(--warn); }
 .judge-skip.on             { background: var(--muted);   border-color: var(--muted); }
+.judge-na.on               { background: #475467;        border-color: #475467; color: #fff; }
+
+/* 中分類の見出しと「まとめて該当なし」ボタン */
+.card h3.unit { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.unit-na {
+  flex: none; font-family: inherit; font-size: 12px; font-weight: 500;
+  color: #475467; background: #f2f4f7; border: 1px solid var(--line); border-radius: 999px;
+  padding: 6px 10px; min-height: 32px; cursor: pointer;
+}
 
 
 
